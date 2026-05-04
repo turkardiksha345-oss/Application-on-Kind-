@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: my56k8s.jfrog.io//sample-docker-local/student-registration-backend:latest
+          image: my56k8s.jfrog.io/sample-docker-local/student-registration-backend:latest
           ports:
             - containerPort: 5000
           env:
@@ -33,9 +33,9 @@ spec:
             - name: PORT
               value: "5000"
           resources:
-           requests:
-            cpu: "100m"
-            memory: "128Mi"
-           limits:
-            cpu: "500m"
-            memory: "512Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
