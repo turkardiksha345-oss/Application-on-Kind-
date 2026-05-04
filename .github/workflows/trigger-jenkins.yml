@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: self-hosted   # required if kubectl + docker available
+    runs-on: self-hosted
 
     steps:
       - name: Install jq
@@ -23,16 +23,42 @@ jobs:
           JENKINS_URL: ${{ secrets.JENKINS_URL }}
           JOB_NAME: ${{ secrets.JENKINS_JOB_NAME }}
           USER: ${{ secrets.JENKINS_USER }}
-          TOKEN: ${{ secrets.JENKIN_API_TOKEN }}
+          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
           echo "🚀 Triggering Jenkins job..."
 
-          CRUMB=$(curl -s -u "$USER:$TOKEN" "$JENKINS_URL/crumbIssuer/api/json" | jq -r '.crumb')
+          # Check token
+          if [ -z "$TOKEN" ]; then
+            echo "❌ TOKEN is empty"
+            exit 1
+          fi
 
-          QUEUE_URL=$(curl -i -X POST "$JENKINS_URL/job/$JOB_NAME/build" \
+          # Get crumb
+          CRUMB_RESPONSE=$(curl -s -u "$USER:$TOKEN" "$JENKINS_URL/crumbIssuer/api/json")
+          echo "Crumb response: $CRUMB_RESPONSE"
+
+          CRUMB=$(echo "$CRUMB_RESPONSE" | jq -r '.crumb')
+
+          if [ "$CRUMB" == "null" ] || [ -z "$CRUMB" ]; then
+            echo "❌ Failed to fetch crumb"
+            exit 1
+          fi
+
+          echo "✅ Crumb fetched"
+
+          # Trigger job
+          RESPONSE=$(curl -i -X POST "$JENKINS_URL/job/$JOB_NAME/build" \
             -u "$USER:$TOKEN" \
-            -H "Jenkins-Crumb:$CRUMB" \
-            | grep -i Location | awk '{print $2}' | tr -d '\r')
+            -H "Jenkins-Crumb:$CRUMB")
+
+          echo "$RESPONSE"
+
+          QUEUE_URL=$(echo "$RESPONSE" | grep -i Location | awk '{print $2}' | tr -d '\r')
+
+          if [ -z "$QUEUE_URL" ]; then
+            echo "❌ Failed to get queue URL"
+            exit 1
+          fi
 
           echo "queue_url=$QUEUE_URL" >> $GITHUB_OUTPUT
 
@@ -43,7 +69,7 @@ jobs:
         id: build
         env:
           USER: ${{ secrets.JENKINS_USER }}
-          TOKEN: ${{ secrets.JENKIN_API_TOKEN }}
+          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
           QUEUE_URL=${{ steps.trigger.outputs.queue_url }}
 
@@ -62,7 +88,7 @@ jobs:
       - name: Wait for Jenkins Result
         env:
           USER: ${{ secrets.JENKINS_USER }}
-          TOKEN: ${{ secrets.JENKIN_API_TOKEN }}
+          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
           BUILD_URL=${{ steps.build.outputs.build_url }}
 
@@ -92,12 +118,10 @@ jobs:
           JFROG_URL: ${{ secrets.JFROG_URL }}
           JFROG_REPO: sample-docker-local
         run: |
-          IMAGE_TAG=$(date +%s)
-
           BACKEND_IMAGE="$JFROG_URL/$JFROG_REPO/student-registration-backend:latest"
           FRONTEND_IMAGE="$JFROG_URL/$JFROG_REPO/student-registration-frontend:latest"
 
-          echo "📦 Deploying images:"
+          echo "📦 Deploying:"
           echo $BACKEND_IMAGE
           echo $FRONTEND_IMAGE
 
