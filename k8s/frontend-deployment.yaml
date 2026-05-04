@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: student-frontend
+  namespace: student-registration
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: student-frontend
+  template:
+    metadata:
+      labels:
+        app: student-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: jfrog.example.com/docker-local/student-registration-frontend:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: API_URL
+              value: "http://student-backend:5000/api"
+          resources:
+           requests:
+            cpu: "100m"
+            memory: "128Mi"
+           limits:
+            cpu: "500m"
+            memory: "512Mi"
+     

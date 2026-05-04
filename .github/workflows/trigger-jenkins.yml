@@ -1,0 +1,48 @@
+name: Trigger Jenkins Deployment
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  trigger-jenkins-job:
+    runs-on: self-hosted   # ✅ IMPORTANT (Kind runner)
+
+    steps:
+      - name: Trigger Jenkins Job
+        env:
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
+          JENKINS_JOB_NAME: ${{ secrets.JENKINS_JOB_NAME }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          GIT_BRANCH: ${{ github.ref_name }}
+        run: |
+          echo "Triggering Jenkins job: $JENKINS_JOB_NAME on branch: $GIT_BRANCH"
+
+          # Get Jenkins crumb (CSRF protection)
+          CRUMB=$(curl -s -u "$JENKINS_USER:$JENKINS_API_TOKEN" \
+            "$JENKINS_URL/crumbIssuer/api/json" | jq -r '.crumb')
+
+          if [ -z "$CRUMB" ] || [ "$CRUMB" == "null" ]; then
+            echo "❌ Failed to fetch Jenkins crumb"
+            exit 1
+          fi
+
+          echo "Crumb fetched successfully"
+
+          # Trigger Jenkins job
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "$JENKINS_URL/job/$JENKINS_JOB_NAME/buildWithParameters?GIT_BRANCH=$GIT_BRANCH" \
+            -u "$JENKINS_USER:$JENKINS_API_TOKEN" \
+            -H "Jenkins-Crumb:$CRUMB")
+
+          echo "Jenkins response code: $RESPONSE"
+
+          if [ "$RESPONSE" -ne 201 ]; then
+            echo "❌ Failed to trigger Jenkins job"
+            exit 1
+          fi
+
+          echo "✅ Jenkins job triggered successfully"

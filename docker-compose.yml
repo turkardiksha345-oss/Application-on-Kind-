@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: student_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password123
+      MYSQL_DATABASE: student_registration
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - student_network
+
+  # Node.js Backend API
+  backend:
+    build: ./backend
+    container_name: student_backend
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: password123
+      DB_NAME: student_registration
+      PORT: 5000
+    ports:
+      - "5000:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - student_network
+    restart: unless-stopped
+
+  # Nginx Frontend
+  frontend:
+    build: ./frontend
+    container_name: student_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    networks:
+      - student_network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+
+networks:
+  student_network:
+    driver: bridge
