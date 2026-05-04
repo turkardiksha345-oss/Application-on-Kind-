@@ -30,23 +30,18 @@ jobs:
         run: |
           echo "🚀 Triggering Jenkins job..."
 
-          # Clean inputs
           JENKINS_URL=$(echo "$JENKINS_URL" | xargs)
           JOB_NAME=$(echo "$JOB_NAME" | xargs)
 
           echo "JENKINS_URL=[$JENKINS_URL]"
           echo "JOB_NAME=[$JOB_NAME]"
 
-          # Validate token
           if [ -z "$TOKEN" ]; then
             echo "❌ TOKEN is empty"
             exit 1
           fi
 
-          # Get crumb
           CRUMB_RESPONSE=$(curl -s -u "$USER:$TOKEN" "$JENKINS_URL/crumbIssuer/api/json")
-          echo "Crumb response: $CRUMB_RESPONSE"
-
           CRUMB=$(echo "$CRUMB_RESPONSE" | jq -r '.crumb')
 
           if [ "$CRUMB" == "null" ] || [ -z "$CRUMB" ]; then
@@ -56,15 +51,11 @@ jobs:
 
           echo "✅ Crumb fetched"
 
-          # Encode job name (handles spaces)
           JOB_NAME_ENCODED=$(echo "$JOB_NAME" | sed 's/ /%20/g')
 
-          # Trigger Jenkins job
           RESPONSE=$(curl -i -X POST "$JENKINS_URL/job/$JOB_NAME_ENCODED/build" \
             -u "$USER:$TOKEN" \
             -H "Jenkins-Crumb:$CRUMB")
-
-          echo "$RESPONSE"
 
           QUEUE_URL=$(echo "$RESPONSE" | grep -i Location | awk '{print $2}' | tr -d '\r')
 
@@ -86,17 +77,20 @@ jobs:
         run: |
           QUEUE_URL=${{ steps.trigger.outputs.queue_url }}
 
-          echo "Waiting for Jenkins to assign build..."
+          echo "⏳ Waiting for Jenkins build..."
 
-          while true; do
+          for i in {1..60}; do
             BUILD_URL=$(curl -s -u "$USER:$TOKEN" "${QUEUE_URL}api/json" | jq -r '.executable.url')
             if [ "$BUILD_URL" != "null" ]; then
-              echo "Build URL: $BUILD_URL"
               echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
-              break
+              echo "✅ Build started: $BUILD_URL"
+              exit 0
             fi
             sleep 5
           done
+
+          echo "❌ Timeout waiting for Jenkins build"
+          exit 1
 
       # -----------------------------
       # 3. Wait for Jenkins Result
@@ -108,14 +102,13 @@ jobs:
         run: |
           BUILD_URL=${{ steps.build.outputs.build_url }}
 
-          echo "Waiting for Jenkins build result..."
+          echo "⏳ Waiting for Jenkins result..."
 
           while true; do
             RESULT=$(curl -s -u "$USER:$TOKEN" "${BUILD_URL}api/json" | jq -r '.result')
             if [ "$RESULT" != "null" ]; then
               echo "Jenkins result: $RESULT"
               if [ "$RESULT" != "SUCCESS" ]; then
-                echo "❌ Jenkins failed"
                 exit 1
               fi
               break
@@ -124,13 +117,24 @@ jobs:
           done
 
       # -----------------------------
-      # 4. Deploy to Kubernetes
+      # 4. Configure Kubernetes
       # -----------------------------
       - name: Set kubeconfig
         run: |
           mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          cat <<EOF > ~/.kube/config
+          ${{ secrets.KUBECONFIG }}
+          EOF
 
+      - name: Verify Kubernetes
+        run: kubectl get nodes
+
+      - name: Ensure Namespace
+        run: kubectl create ns student-registration || true
+
+      # -----------------------------
+      # 5. Deploy to Kubernetes
+      # -----------------------------
       - name: Deploy to Kubernetes
         env:
           JFROG_URL: ${{ secrets.JFROG_URL }}
@@ -139,7 +143,7 @@ jobs:
           BACKEND_IMAGE="$JFROG_URL/$JFROG_REPO/student-registration-backend:latest"
           FRONTEND_IMAGE="$JFROG_URL/$JFROG_REPO/student-registration-frontend:latest"
 
-          echo "📦 Deploying images:"
+          echo "📦 Deploying:"
           echo $BACKEND_IMAGE
           echo $FRONTEND_IMAGE
 
