@@ -1,21 +1,24 @@
 // ============================================
-// API Configuration - Handles both local and EC2
+// API Configuration (Kubernetes + Nginx Proxy)
 // ============================================
 
-function getAPIURL() {
-  // If running locally (localhost/127.0.0.1)
-  if (window.location.hostname === 'localhost' || 
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === '0.0.0.0') {
-    return 'http://localhost:5000/api';
-  }
-  
+// Always use nginx reverse proxy
+// /api → forwarded to student-backend service
+const API_URL = '/api';
+
+// Debug logs
+console.log('=== API Configuration ===');
+console.log('Frontend URL:', window.location.href);
+console.log('API URL:', API_URL);
+console.log('========================');
+
+
   // For EC2 or any other IP/domain
   // Auto-detect from the URL bar hostname
   const protocol = window.location.protocol;
   const hostname = window.location.hostname;
   return protocol + '//' + hostname + ':5000/api';
-}
+
 
 const API_URL = getAPIURL();
 
