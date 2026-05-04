@@ -16,6 +16,7 @@ spec:
       containers:
         - name: backend
           image: my56k8s.jfrog.io/sample-docker-local/student-registration-backend:latest
+          imagePullPolicy: Always   # 🔥 ensures latest image is pulled
           ports:
             - containerPort: 5000
           env:
