@@ -16,6 +16,7 @@ spec:
       containers:
         - name: frontend
           image: my56k8s.jfrog.io/sample-docker-local/student-registration-frontend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
           env:

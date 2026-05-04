@@ -12,11 +12,6 @@ spec:
     metadata:
       labels:
         app: mysql
-  spec:
-   template:
-    metadata:
-      labels:
-        app: mysql
     spec:
       containers:
         - name: mysql
@@ -30,7 +25,14 @@ spec:
                   name: mysql-credentials
                   key: mysql-root-password
             - name: MYSQL_DATABASE
-              value: student_registration
+              value: student_registration   # ✅ fixed
+          resources:                        # ✅ added
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
           volumeMounts:
             - name: mysql-data
               mountPath: /var/lib/mysql
