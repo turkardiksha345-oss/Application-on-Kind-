@@ -15,7 +15,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq
 
       # -----------------------------
-      # 1. Trigger Jenkins
+      # 1. Trigger Jenkins Job
       # -----------------------------
       - name: Trigger Jenkins Job
         id: trigger
@@ -27,7 +27,14 @@ jobs:
         run: |
           echo "🚀 Triggering Jenkins job..."
 
-          # Check token
+          # Clean inputs
+          JENKINS_URL=$(echo "$JENKINS_URL" | xargs)
+          JOB_NAME=$(echo "$JOB_NAME" | xargs)
+
+          echo "JENKINS_URL=[$JENKINS_URL]"
+          echo "JOB_NAME=[$JOB_NAME]"
+
+          # Validate token
           if [ -z "$TOKEN" ]; then
             echo "❌ TOKEN is empty"
             exit 1
@@ -46,8 +53,11 @@ jobs:
 
           echo "✅ Crumb fetched"
 
-          # Trigger job
-          RESPONSE=$(curl -i -X POST "$JENKINS_URL/job/$JOB_NAME/build" \
+          # Encode job name (handles spaces)
+          JOB_NAME_ENCODED=$(echo "$JOB_NAME" | sed 's/ /%20/g')
+
+          # Trigger Jenkins job
+          RESPONSE=$(curl -i -X POST "$JENKINS_URL/job/$JOB_NAME_ENCODED/build" \
             -u "$USER:$TOKEN" \
             -H "Jenkins-Crumb:$CRUMB")
 
@@ -73,9 +83,12 @@ jobs:
         run: |
           QUEUE_URL=${{ steps.trigger.outputs.queue_url }}
 
+          echo "Waiting for Jenkins to assign build..."
+
           while true; do
             BUILD_URL=$(curl -s -u "$USER:$TOKEN" "${QUEUE_URL}api/json" | jq -r '.executable.url')
             if [ "$BUILD_URL" != "null" ]; then
+              echo "Build URL: $BUILD_URL"
               echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
               break
             fi
@@ -91,6 +104,8 @@ jobs:
           TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
           BUILD_URL=${{ steps.build.outputs.build_url }}
+
+          echo "Waiting for Jenkins build result..."
 
           while true; do
             RESULT=$(curl -s -u "$USER:$TOKEN" "${BUILD_URL}api/json" | jq -r '.result')
@@ -121,7 +136,7 @@ jobs:
           BACKEND_IMAGE="$JFROG_URL/$JFROG_REPO/student-registration-backend:latest"
           FRONTEND_IMAGE="$JFROG_URL/$JFROG_REPO/student-registration-frontend:latest"
 
-          echo "📦 Deploying:"
+          echo "📦 Deploying images:"
           echo $BACKEND_IMAGE
           echo $FRONTEND_IMAGE
 
