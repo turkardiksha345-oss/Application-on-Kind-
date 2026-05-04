@@ -1,0 +1,33 @@
+name: Scale Application
+
+on:
+  workflow_dispatch:
+    inputs:
+      replicas:
+        description: "Number of replicas"
+        required: true
+        default: "2"
+
+jobs:
+  scale:
+    runs-on: self-hosted
+
+    steps:
+      - name: Set kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          cat <<EOF > ~/.kube/config
+          ${{ secrets.KUBECONFIG }}
+          EOF
+
+      - name: Scale Backend
+        run: |
+          kubectl scale deployment student-backend \
+            --replicas=${{ github.event.inputs.replicas }} \
+            -n student-registration
+
+      - name: Scale Frontend
+        run: |
+          kubectl scale deployment student-frontend \
+            --replicas=${{ github.event.inputs.replicas }} \
+            -n student-registration
