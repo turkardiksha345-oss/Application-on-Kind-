@@ -13,6 +13,8 @@ spec:
       labels:
         app: student-backend
     spec:
+      imagePullSecrets:
+        - name: jfrog-secret
       containers:
         - name: backend
           image: my56k8s.jfrog.io/sample-docker-local/student-registration-backend:latest
