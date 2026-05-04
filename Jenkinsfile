@@ -3,8 +3,8 @@ pipeline {
 
   environment {
     IMAGE_TAG = "${BUILD_NUMBER}"
-    JFROG_URL = "jfrog.example.com"
-    JFROG_REPO = "docker-local"
+    JFROG_URL = "my56k8s.jfrog.io"
+    JFROG_REPO = "sample-docker-local"
 
     BACKEND_IMAGE = "${JFROG_URL}/${JFROG_REPO}/student-registration-backend:${IMAGE_TAG}"
     FRONTEND_IMAGE = "${JFROG_URL}/${JFROG_REPO}/student-registration-frontend:${IMAGE_TAG}"
