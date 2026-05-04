@@ -3,7 +3,7 @@ pipeline {
 
   environment {
     IMAGE_TAG = "${BUILD_NUMBER}"
-    JFROG_URL = "jfrog.example.com"   // ❗ no https
+    JFROG_URL = "jfrog.example.com"
     JFROG_REPO = "docker-local"
 
     BACKEND_IMAGE = "${JFROG_URL}/${JFROG_REPO}/student-registration-backend:${IMAGE_TAG}"
@@ -11,8 +11,6 @@ pipeline {
 
     BACKEND_LATEST = "${JFROG_URL}/${JFROG_REPO}/student-registration-backend:latest"
     FRONTEND_LATEST = "${JFROG_URL}/${JFROG_REPO}/student-registration-frontend:latest"
-
-    NAMESPACE = "student-registration"
   }
 
   stages {
@@ -61,45 +59,19 @@ pipeline {
       }
     }
 
-    stage('Deploy to Kubernetes') {
-      steps {
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_PATH')]) {
-          sh '''
-            export KUBECONFIG="$KUBECONFIG_PATH"
-
-            # Ensure namespace exists
-            kubectl get ns $NAMESPACE || kubectl create ns $NAMESPACE
-
-            # Apply manifests
-            kubectl apply -k k8s
-
-            # Update images dynamically
-            kubectl set image deployment/student-backend backend=$BACKEND_IMAGE -n $NAMESPACE
-            kubectl set image deployment/student-frontend frontend=$FRONTEND_IMAGE -n $NAMESPACE
-
-            # Wait for rollout
-            kubectl rollout status deployment/student-backend -n $NAMESPACE
-            kubectl rollout status deployment/student-frontend -n $NAMESPACE
-          '''
-        }
-      }
-    }
-
     stage('Cleanup') {
       steps {
-        sh '''
-          docker system prune -af || true
-        '''
+        sh 'docker system prune -af || true'
       }
     }
   }
 
   post {
     success {
-      echo "✅ Deployment successful!"
+      echo "✅ Images built & pushed to JFrog"
     }
     failure {
-      echo "❌ Pipeline failed. Check logs."
+      echo "❌ Pipeline failed"
     }
   }
 }

@@ -1,4 +1,4 @@
-name: Trigger Jenkins Deployment
+name: CI + CD Pipeline
 
 on:
   push:
@@ -7,42 +7,104 @@ on:
   workflow_dispatch:
 
 jobs:
-  trigger-jenkins-job:
-    runs-on: self-hosted   # ✅ IMPORTANT (Kind runner)
+  build-and-deploy:
+    runs-on: self-hosted   # required if kubectl + docker available
 
     steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # -----------------------------
+      # 1. Trigger Jenkins
+      # -----------------------------
       - name: Trigger Jenkins Job
+        id: trigger
         env:
           JENKINS_URL: ${{ secrets.JENKINS_URL }}
-          JENKINS_JOB_NAME: ${{ secrets.JENKINS_JOB_NAME }}
-          JENKINS_USER: ${{ secrets.JENKINS_USER }}
-          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
-          GIT_BRANCH: ${{ github.ref_name }}
+          JOB_NAME: ${{ secrets.JENKINS_JOB_NAME }}
+          USER: ${{ secrets.JENKINS_USER }}
+          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
-          echo "Triggering Jenkins job: $JENKINS_JOB_NAME on branch: $GIT_BRANCH"
+          echo "🚀 Triggering Jenkins job..."
 
-          # Get Jenkins crumb (CSRF protection)
-          CRUMB=$(curl -s -u "$JENKINS_USER:$JENKINS_API_TOKEN" \
-            "$JENKINS_URL/crumbIssuer/api/json" | jq -r '.crumb')
+          CRUMB=$(curl -s -u "$USER:$TOKEN" "$JENKINS_URL/crumbIssuer/api/json" | jq -r '.crumb')
 
-          if [ -z "$CRUMB" ] || [ "$CRUMB" == "null" ]; then
-            echo "❌ Failed to fetch Jenkins crumb"
-            exit 1
-          fi
+          QUEUE_URL=$(curl -i -X POST "$JENKINS_URL/job/$JOB_NAME/build" \
+            -u "$USER:$TOKEN" \
+            -H "Jenkins-Crumb:$CRUMB" \
+            | grep -i Location | awk '{print $2}' | tr -d '\r')
 
-          echo "Crumb fetched successfully"
+          echo "queue_url=$QUEUE_URL" >> $GITHUB_OUTPUT
 
-          # Trigger Jenkins job
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "$JENKINS_URL/job/$JENKINS_JOB_NAME/buildWithParameters?GIT_BRANCH=$GIT_BRANCH" \
-            -u "$JENKINS_USER:$JENKINS_API_TOKEN" \
-            -H "Jenkins-Crumb:$CRUMB")
+      # -----------------------------
+      # 2. Get Build URL
+      # -----------------------------
+      - name: Wait for Build Number
+        id: build
+        env:
+          USER: ${{ secrets.JENKINS_USER }}
+          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+        run: |
+          QUEUE_URL=${{ steps.trigger.outputs.queue_url }}
 
-          echo "Jenkins response code: $RESPONSE"
+          while true; do
+            BUILD_URL=$(curl -s -u "$USER:$TOKEN" "${QUEUE_URL}api/json" | jq -r '.executable.url')
+            if [ "$BUILD_URL" != "null" ]; then
+              echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
+              break
+            fi
+            sleep 5
+          done
 
-          if [ "$RESPONSE" -ne 201 ]; then
-            echo "❌ Failed to trigger Jenkins job"
-            exit 1
-          fi
+      # -----------------------------
+      # 3. Wait for Jenkins Result
+      # -----------------------------
+      - name: Wait for Jenkins Result
+        env:
+          USER: ${{ secrets.JENKINS_USER }}
+          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+        run: |
+          BUILD_URL=${{ steps.build.outputs.build_url }}
 
-          echo "✅ Jenkins job triggered successfully"
+          while true; do
+            RESULT=$(curl -s -u "$USER:$TOKEN" "${BUILD_URL}api/json" | jq -r '.result')
+            if [ "$RESULT" != "null" ]; then
+              echo "Jenkins result: $RESULT"
+              if [ "$RESULT" != "SUCCESS" ]; then
+                echo "❌ Jenkins failed"
+                exit 1
+              fi
+              break
+            fi
+            sleep 10
+          done
+
+      # -----------------------------
+      # 4. Deploy to Kubernetes
+      # -----------------------------
+      - name: Set kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+
+      - name: Deploy to Kubernetes
+        env:
+          JFROG_URL: ${{ secrets.JFROG_URL }}
+          JFROG_REPO: docker-local
+        run: |
+          IMAGE_TAG=$(date +%s)
+
+          BACKEND_IMAGE="$JFROG_URL/$JFROG_REPO/student-registration-backend:latest"
+          FRONTEND_IMAGE="$JFROG_URL/$JFROG_REPO/student-registration-frontend:latest"
+
+          echo "📦 Deploying images:"
+          echo $BACKEND_IMAGE
+          echo $FRONTEND_IMAGE
+
+          kubectl apply -k k8s
+
+          kubectl set image deployment/student-backend backend=$BACKEND_IMAGE -n student-registration
+          kubectl set image deployment/student-frontend frontend=$FRONTEND_IMAGE -n student-registration
+
+          kubectl rollout status deployment/student-backend -n student-registration
+          kubectl rollout status deployment/student-frontend -n student-registration
