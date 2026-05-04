@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: jfrog.example.com/docker-local/student-registration-backend:latest
+          image: my56k8s.jfrog.io//sample-docker-local/student-registration-backend:latest
           ports:
             - containerPort: 5000
           env:

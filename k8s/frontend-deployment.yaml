@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: jfrog.example.com/docker-local/student-registration-frontend:latest
+          image:  my56k8s.jfrog.io//sample-docker-local/student-registration-frontend:latest
           ports:
             - containerPort: 80
           env:
