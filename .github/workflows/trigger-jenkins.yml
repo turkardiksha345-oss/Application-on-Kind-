@@ -90,7 +90,7 @@ jobs:
       - name: Deploy to Kubernetes
         env:
           JFROG_URL: ${{ secrets.JFROG_URL }}
-          JFROG_REPO: docker-local
+          JFROG_REPO: sample-docker-local
         run: |
           IMAGE_TAG=$(date +%s)
 
