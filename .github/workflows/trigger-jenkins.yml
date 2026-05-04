@@ -23,7 +23,7 @@ jobs:
           JENKINS_URL: ${{ secrets.JENKINS_URL }}
           JOB_NAME: ${{ secrets.JENKINS_JOB_NAME }}
           USER: ${{ secrets.JENKINS_USER }}
-          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          TOKEN: ${{ secrets.JENKIN_API_TOKEN }}
         run: |
           echo "🚀 Triggering Jenkins job..."
 
@@ -43,7 +43,7 @@ jobs:
         id: build
         env:
           USER: ${{ secrets.JENKINS_USER }}
-          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          TOKEN: ${{ secrets.JENKIN_API_TOKEN }}
         run: |
           QUEUE_URL=${{ steps.trigger.outputs.queue_url }}
 
@@ -62,7 +62,7 @@ jobs:
       - name: Wait for Jenkins Result
         env:
           USER: ${{ secrets.JENKINS_USER }}
-          TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          TOKEN: ${{ secrets.JENKIN_API_TOKEN }}
         run: |
           BUILD_URL=${{ steps.build.outputs.build_url }}
 
